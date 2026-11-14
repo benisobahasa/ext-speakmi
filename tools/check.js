@@ -46,8 +46,13 @@ ok("no network APIs, eval, or remote resources in content/ and popup/");
   for (const id of used) if (!have.has(id)) fail(`popup.js uses #${id} but popup.html has no such element`);
   const scripts = [...html.matchAll(/<script src="\.\.\/([^"]+)"/g)].map((m) => m[1]);
   for (const f of scripts) if (!fs.existsSync(path.join(root, f))) fail("popup.html loads a missing script: " + f);
-  const inj = (js.match(/files:\s*\[([^\]]+)\]/) || [, ""])[1].match(/"[^"]+"/g) || [];
-  for (const q of inj) if (!fs.existsSync(path.join(root, q.slice(1, -1)))) fail("popup.js injects a missing file: " + q);
+  const inj = (js.match(/const LIB = \[([^\]]+)\]/) || [, ""])[1].match(/"[^"]+"/g) || [];
+  if (!inj.length) fail("popup.js: could not find the LIB list of injected files");
+  for (const q of inj) {
+    const f = q.slice(1, -1);
+    if (!f.startsWith("/")) fail("popup.js injects a path that Firefox resolves relative to the popup page (needs a leading /): " + f);
+    if (!fs.existsSync(path.join(root, f.replace(/^\//, "")))) fail("popup.js injects a missing file: " + f);
+  }
   ok("popup.html and popup.js agree: all element ids and script files exist");
 }
 

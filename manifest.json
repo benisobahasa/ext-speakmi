@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Speakmi: Calm Reader for ADHD & Dyslexia",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "description": "Turns long articles into calm, bite-sized reading with source-checked key points. Made for ADHD and dyslexia. Runs on your device.",
   "permissions": [
     "activeTab",

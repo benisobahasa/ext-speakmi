@@ -330,7 +330,7 @@ summary{cursor:pointer;font-size:.82em;color:var(--acc);margin-top:8px;min-heigh
     let bar, inner;
     if (!article) {
       bar = `<header class="bar">${brand}<div class="tools"><button data-act="close" aria-label="${esc(T("close"))}">✕</button></div></header>`;
-      inner = `<div class="msg" role="alert">${esc(T("notEnough"))}</div>`;
+      inner = `<div class="msg" role="alert">${esc(st.fail ? T("failed", { e: st.fail }) : T("notEnough"))}</div>`;
     } else if (false) {
       inner = "";
     } else {
@@ -480,15 +480,23 @@ summary{cursor:pointer;font-size:.82em;color:var(--acc);margin-top:8px;min-heigh
   // ---------- lifecycle ----------
   async function open() {
     if (host) close();
-    await loadSettings();
-    Object.assign(st, { chunk: -1, original: false, rewrites: {}, showOrig: new Set(), openSrc: new Set(), openSec: new Set([0]), busy: false, aiMsg: "", panel: false, marks: new Set(), paywall: false, finished: false, celebrate: false, streak: null });
-    rewriter = null; model = null;
-    BR.loadFonts().then((ok) => { if (ok && root) render(); });
-    article = extract();
-    st.premium = true; st.plan = "open"; st.left = Infinity;
-    if (article) { analyze(); if (!S.focus) st.chunk = 0; }
-    if (S.ai && (!st.premium || !model)) S.ai = false;
-    if (S.ai) { try { await initAI(); } catch (e) { S.ai = false; st.aiMsg = e.message; } }
+    st.fail = "";
+    try {
+      await loadSettings();
+      Object.assign(st, { chunk: -1, original: false, rewrites: {}, showOrig: new Set(), openSrc: new Set(), openSec: new Set([0]), busy: false, aiMsg: "", panel: false, marks: new Set(), paywall: false, finished: false, celebrate: false, streak: null });
+      rewriter = null; model = null;
+      BR.loadFonts().then((ok) => { if (ok && root) render(); }).catch(() => {});
+      article = extract();
+      st.premium = true; st.plan = "open"; st.left = Infinity;
+      if (article) { analyze(); if (!S.focus) st.chunk = 0; }
+      if (S.ai && (!st.premium || !model)) S.ai = false;
+      if (S.ai) { try { await initAI(); } catch (e) { S.ai = false; st.aiMsg = e.message; } }
+    } catch (e) {
+      // Never leave the reader with a blank page: show what went wrong.
+      console.error("[Speakmi]", e);
+      article = null; model = null;
+      st.fail = (e && e.message) ? e.message : String(e);
+    }
     host = document.createElement("div");
     host.id = "speakmi-host";
     host.style.cssText = "all:initial;position:fixed;inset:0;z-index:2147483647;";
@@ -499,7 +507,11 @@ summary{cursor:pointer;font-size:.82em;color:var(--acc);margin-top:8px;min-heigh
     prevOverflow = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
     document.documentElement.appendChild(host);
-    render();
+    try { render(); } catch (e) {
+      console.error("[Speakmi]", e);
+      st.fail = (e && e.message) ? e.message : String(e); article = null; model = null;
+      try { render(); } catch (e2) { close(); throw e2; }
+    }
     const m = root.querySelector(".main"); if (m) m.focus();
   }
 

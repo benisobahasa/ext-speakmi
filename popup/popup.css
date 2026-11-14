@@ -1,5 +1,5 @@
 @charset "utf-8";
-:root{--acc:#4F5FD6;--line:#DDE3F7;--muted:#55608A;--bg:#EEF2FF;--ok:#0B7F78;--cta:linear-gradient(135deg,#F2602F,#DB2D68);--brand:linear-gradient(135deg,#6C7BEA,#3BAFE0 55%,#1CDDD8)}
+:root{color-scheme:light;--acc:#4F5FD6;--line:#DDE3F7;--muted:#55608A;--bg:#EEF2FF;--ok:#0B7F78;--cta:linear-gradient(135deg,#F2602F,#DB2D68);--brand:linear-gradient(135deg,#6C7BEA,#3BAFE0 55%,#1CDDD8)}
 *{box-sizing:border-box}
 body{margin:0;width:360px;padding:14px;background:radial-gradient(circle at 100% 0,rgba(108,123,234,.35),transparent 55%),radial-gradient(circle at 0 100%,rgba(28,221,216,.30),transparent 55%),linear-gradient(180deg,#FAFCFF,var(--bg));color:#1B2440;font:14px/1.5 "Speakmi Lexend","Segoe UI",Verdana,Arial,sans-serif}
 .hero{display:flex;gap:12px;align-items:center;margin-bottom:12px;padding:12px 14px;border-radius:20px;background:var(--brand);color:#0D1226;box-shadow:0 10px 26px rgba(59,175,224,.35)}
@@ -46,3 +46,9 @@ footer{display:flex;justify-content:space-between;align-items:center;margin-top:
 footer a{color:var(--muted)}
 .good{color:var(--ok)}.bad{color:#9A3412}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+html{background:#EEF2FF}
+select,input,summary,label,legend,details{color:#1B2440}
+select{background-color:#fff}
+summary{color:var(--acc)}
+.errDetail,#errDetail{word-break:break-word}

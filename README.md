@@ -45,7 +45,7 @@ npm install && npm test   # DOM tests (need jsdom; not part of CI yet)
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Status
-Beta (0.4.0). Not yet validated in a study; evidence from the first pilot will be published in [docs/pilot](docs/pilot/RESULTS.md), whatever it shows. The Firefox Add-ons listing is not live yet.
+Beta (0.4.2). Not yet validated in a study; evidence from the first pilot will be published in [docs/pilot](docs/pilot/RESULTS.md), whatever it shows. The Firefox Add-ons listing is not live yet.
 
 ## Contribute
 The most useful contributions are **new languages** (idioms with literal meanings, simpler words, sentence rules), **real-world test articles**, and a **small-model rewriter for Firefox**. See [CONTRIBUTING.md](CONTRIBUTING.md). Please follow the [Mozilla Community Participation Guidelines](CODE_OF_CONDUCT.md).

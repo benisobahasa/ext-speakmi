@@ -33,6 +33,7 @@
       
       
       
+      errDetails: "Technical details: {e}", failed: "Speakmi hit a problem on this page: {e}",
       popupPrivacy: "Privacy", popupSupport: "Support", popupReset: "Reset today's count (for demos)", popupBeta: "Beta",
       streakLine: "{days}-day reading streak · {total} finished", langNames: { en: "English", de: "Deutsch", id: "Bahasa Indonesia" }
     },
@@ -67,6 +68,7 @@
       
       
       
+      errDetails: "Technische Details: {e}", failed: "Speakmi ist auf dieser Seite auf ein Problem gestoßen: {e}",
       popupPrivacy: "Datenschutz", popupSupport: "Support", popupReset: "Heutigen Zähler zurücksetzen (für Demos)", popupBeta: "Beta",
       streakLine: "{days} Tage in Folge gelesen · {total} abgeschlossen", langNames: { en: "English", de: "Deutsch", id: "Bahasa Indonesia" }
     },
@@ -101,6 +103,7 @@
       
       
       
+      errDetails: "Detail teknis: {e}", failed: "Speakmi mengalami masalah di halaman ini: {e}",
       popupPrivacy: "Privasi", popupSupport: "Bantuan", popupReset: "Atur ulang hitungan hari ini (untuk demo)", popupBeta: "Beta",
       streakLine: "{days} hari berturut-turut membaca · {total} selesai", langNames: { en: "English", de: "Deutsch", id: "Bahasa Indonesia" }
     }

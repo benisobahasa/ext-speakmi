@@ -168,6 +168,64 @@ const click = (R, sel) => { const el = R.querySelector(sel); if (!el) throw new 
   await dom.window.__speakmi.open();
   ok(/could not find enough/.test(dom.window.document.getElementById("speakmi-host").shadowRoot.textContent), "short page shows a clear message");
 
+  // --- reading view: a failure must be shown, not leave a blank page ---
+  {
+    const d = new JSDOM(demo("sample-en.html"), { runScripts: "outside-only", pretendToBeVisual: true, url: "https://example.org/" });
+    d.window.chrome = { storage: { local: { get: async () => { throw new Error("storage broke"); }, set() {} } } };
+    for (const file of FILES) d.window.eval(fs.readFileSync(path.join(__dirname, "..", file), "utf8"));
+    d.window.SpeakmiEngine.analyze = () => { throw new Error("analysis broke"); };
+    await d.window.__speakmi.open();
+    const host = d.window.document.getElementById("speakmi-host");
+    ok(!!host && /analysis broke/.test(host.shadowRoot.textContent), "a failing analysis shows a message instead of a blank page");
+  }
+
+  // --- popup: errors from injected scripts are shown, the popup stays open, sections render on their own ---
+  async function popupTest(execImpl, uiLang) {
+    const html = fs.readFileSync(path.join(__dirname, "../popup/popup.html"), "utf8").replace(/<script src="[^"]+"><\/script>/g, "");
+    const d = new JSDOM(html, { runScripts: "outside-only", pretendToBeVisual: true });
+    const w = d.window;
+    Object.defineProperty(w.navigator, "language", { value: uiLang || "en-US" });
+    let closed = false; w.close = () => { closed = true; };
+    w.chrome = { storage: { local: { get: async () => ({}), set: async () => {} } }, tabs: { query: async () => [{ id: 7 }] }, scripting: { executeScript: execImpl } };
+    w.FontFace = function () { this.load = async () => this; }; w.document.fonts = { add() {} };
+    for (const f of ["content/brand.js", "content/config.js", "content/i18n.js", "content/evidence.js", "popup/popup.js"]) w.eval(fs.readFileSync(path.join(__dirname, "..", f), "utf8"));
+    await new Promise((r) => setTimeout(r, 50));
+    return { w, d: w.document, wasClosed: () => closed };
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  {
+    let injected = null;
+    const good = await popupTest(async (o) => { if (o.files) injected = o.files; return [{ result: o.files ? undefined : (o.func.toString().includes("then") ? true : false) }]; }, "id-ID");
+    ok(good.d.querySelectorAll("#profiles label").length === 5 && good.d.querySelectorAll("#lang option").length === 4, "popup draws profiles and language lists (Indonesian UI)");
+    good.d.getElementById("run").click(); await sleep(50);
+    ok(good.wasClosed(), "popup closes only after the reading view was added");
+    ok(Array.isArray(injected) && injected.length === 7 && injected.every((f) => f.startsWith("/") && fs.existsSync(path.join(__dirname, "..", f.slice(1)))), "popup injects root-relative paths that exist (Firefox resolves others against popup/)");
+  }
+  {
+    const bad = await popupTest(async (o) => (o.files ? [{ result: undefined }] : o.func.toString().includes("then") ? [{ error: { message: "boom in page" } }] : [{ result: false }]));
+    bad.d.getElementById("run").click(); await sleep(50);
+    ok(!bad.wasClosed(), "popup stays open when the injected script throws");
+    ok(!bad.d.getElementById("err").hidden && /boom in page/.test(bad.d.getElementById("errDetail").textContent), "popup shows the real error text");
+  }
+  {
+    const miss = await popupTest(async (o) => (o.files ? [{ error: "Unable to load script" }] : [{ result: false }]));
+    miss.d.getElementById("run").click(); await sleep(50);
+    ok(!miss.wasClosed() && /Unable to load script/.test(miss.d.getElementById("errDetail").textContent), "popup reports a script file that could not be loaded");
+  }
+  {
+    const nohost = await popupTest(async (o) => (o.files ? [{ result: undefined }] : o.func.toString().includes("then") ? [{ result: false }] : [{ result: false }]));
+    nohost.d.getElementById("run").click(); await sleep(50);
+    ok(!nohost.wasClosed(), "popup stays open when the reading view did not appear");
+  }
+  {
+    let saved = null;
+    const part = await popupTest(async () => [{ result: true }]);
+    part.w.chrome.storage.local.set = async (o) => { saved = o; };
+    const radio = part.d.querySelector('#profiles input[value="adhd"]'); radio.checked = true;
+    radio.dispatchEvent(new part.w.Event("change", { bubbles: true })); await sleep(20);
+    ok(saved && saved.speakmiSettings.profile === "adhd", "choosing a reading profile in the popup is saved");
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })();
