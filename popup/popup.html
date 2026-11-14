@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speakmi</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<header class="hero">
+  <div class="logobox"><img id="logo" class="logo" alt=""></div>
+  <div class="head"><h1>Speakmi <span class="beta" id="beta"></span></h1><p id="hint"></p></div>
+</header>
+
+<p class="small" id="openNote"></p>
+
+<fieldset>
+  <legend id="lProfile"></legend>
+  <div id="profiles" class="profiles" role="radiogroup"></div>
+</fieldset>
+
+<button id="run" class="cta"></button>
+<p id="err" class="error" role="alert" hidden></p>
+
+<details class="opt">
+  <summary id="lMore"></summary>
+  <label class="row"><span id="lLang"></span><select id="lang"></select></label>
+  <label class="row"><span id="lUi"></span><select id="ui"></select></label>
+  <label class="check"><input type="checkbox" id="focus"><span id="lFocus"></span></label>
+</details>
+
+
+<details class="opt">
+  <summary id="lAbout"></summary>
+  <ul id="evidence" class="evid"></ul>
+  <p class="muted small">Rule-based mode uses the article's own sentences, unchanged. Optional on-device AI rewrites are checked for numbers, names and negations before they are shown. Speakmi is a reading aid, not medical advice.</p>
+</details>
+
+<footer>
+  <a id="privacy" href="#" target="_blank" rel="noopener"></a>
+  <a id="support" href="#"></a>
+</footer>
+
+<script src="../content/brand.js"></script>
+<script src="../content/config.js"></script>
+<script src="../content/i18n.js"></script>
+<script src="../content/evidence.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
