@@ -31,7 +31,6 @@ function paint() {
   $("run").textContent = T("popupRun") + " →";
   $("privacy").textContent = T("popupPrivacy"); $("privacy").href = CFG.PRIVACY_URL;
   $("support").textContent = T("popupSupport"); $("support").href = "mailto:" + CFG.SUPPORT_EMAIL;
-  $("reset").textContent = T("popupReset");
   $("profiles").innerHTML = PROFILES.map((p) =>
     `<label style="--pc:${PICON[p][1]}"><input type="radio" name="profile" value="${p}" ${S.profile === p ? "checked" : ""}><span class="ico" aria-hidden="true">${PICON[p][0]}</span><span>${T("profiles")[p]}</span></label>`).join("");
   const names = T("langNames");

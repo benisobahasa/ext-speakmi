@@ -38,5 +38,18 @@ for (const f of list("popup", ".html")) {
 }
 ok("no network APIs, eval, or remote resources in content/ and popup/");
 
+// every element the popup script looks up by id must exist in popup.html (a missing one stops the popup half-way)
+{
+  const js = read("popup/popup.js"), html = read("popup/popup.html");
+  const used = new Set([...js.matchAll(/\$\("([A-Za-z]+)"\)/g)].map((m) => m[1]));
+  const have = new Set([...html.matchAll(/id="([A-Za-z]+)"/g)].map((m) => m[1]));
+  for (const id of used) if (!have.has(id)) fail(`popup.js uses #${id} but popup.html has no such element`);
+  const scripts = [...html.matchAll(/<script src="\.\.\/([^"]+)"/g)].map((m) => m[1]);
+  for (const f of scripts) if (!fs.existsSync(path.join(root, f))) fail("popup.html loads a missing script: " + f);
+  const inj = (js.match(/files:\s*\[([^\]]+)\]/) || [, ""])[1].match(/"[^"]+"/g) || [];
+  for (const q of inj) if (!fs.existsSync(path.join(root, q.slice(1, -1)))) fail("popup.js injects a missing file: " + q);
+  ok("popup.html and popup.js agree: all element ids and script files exist");
+}
+
 if (bad) { console.error(`\n${bad} problem(s).`); process.exit(1); }
 console.log("\nAll checks passed.");
