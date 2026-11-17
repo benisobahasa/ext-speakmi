@@ -52,3 +52,6 @@ select,input,summary,label,legend,details{color:#1B2440}
 select{background-color:#fff}
 summary{color:var(--acc)}
 .errDetail,#errDetail{word-break:break-word}
+
+.small.bad{color:#b3261e;font-weight:600}
+.help{background:#fff6e5;border:1px solid #f0d49a;border-radius:12px;padding:8px 10px;color:#4a3b12;line-height:1.5}

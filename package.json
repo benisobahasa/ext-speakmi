@@ -1,11 +1,13 @@
 {
   "name": "speakmi",
-  "version": "0.4.2",
+  "version": "0.5.3",
   "private": false,
-  "description": "Open-source Firefox extension that turns long web articles into short, source-linked parts for readers with ADHD, dyslexia and autism. No model in the core, no network requests.",
+  "description": "Open-source Firefox extension that turns long web articles into short, source-linked parts for readers with ADHD, dyslexia and autism. Extractive core with no model; optional small on-device rewriter behind fidelity checks; no network requests.",
   "scripts": {
     "check": "node tools/check.js",
-    "test": "node tests/run.js",
+    "test": "node tests/ai.test.js && node tests/run.js",
+    "test:ai": "node tests/ai.test.js",
+    "eval": "node tools/eval-rewriter.js",
     "build": "node tools/build.js"
   },
   "devDependencies": {

@@ -9,4 +9,5 @@ jobs:
         with:
           node-version: 20
       - run: node tools/check.js
+      - run: node tests/ai.test.js
       - run: node tools/build.js
