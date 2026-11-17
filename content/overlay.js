@@ -11,10 +11,10 @@
   "use strict";
   if (window.__speakmi) return;
 
-  const E = window.SpeakmiEngine, I = window.SpeakmiI18N, EV = window.SpeakmiEvidence, CFG = window.SpeakmiConfig, BR = window.SpeakmiBrand || { logo: "", loadFonts: () => Promise.resolve(false) };
+  const E = window.SpeakmiEngine, LA = window.SpeakmiLocalAI, I = window.SpeakmiI18N, EV = window.SpeakmiEvidence, CFG = window.SpeakmiConfig, BR = window.SpeakmiBrand || { logo: "", loadFonts: () => Promise.resolve(false) };
   const DEFAULTS = { profile: "mixed", theme: "aurora", scale: 1, focus: true, hints: true, idioms: true, ai: false, lang: "auto", ui: "auto", recap: false, tune: {} };
   let S = Object.assign({}, DEFAULTS);
-  let host = null, root = null, article = null, model = null, where = {}, rewriter = null;
+  let host = null, root = null, article = null, model = null, where = {}, ai = null;
   const st = {
     chunk: -1, original: false, openSrc: new Set(), hl: null, openSec: new Set([0]), rewrites: {}, showOrig: new Set(),
     busy: false, aiMsg: "", panel: false, marks: new Set(), premium: true, plan: "open", left: Infinity, paywall: false,
@@ -129,9 +129,10 @@
   }
 
   function auditHTML() {
-    let n = 0, ok = 0, bad = 0;
-    model.order.forEach((id) => { n++; const rw = st.rewrites[id]; if (rw && !rw.same) { if (rw.v.ok) ok++; else bad++; } });
-    return `<section class="card fid"><h2>✓ ${esc(T("fidelity"))}</h2><p>${esc(T("fidelityLine", { n, v: n - ok - bad, ok, bad }))}</p><p class="muted small">${esc(T("fidelityNote"))}</p></section>`;
+    let n = 0, ok = 0, bad = 0, kept = 0;
+    model.order.forEach((id) => { n++; const rw = st.rewrites[id]; if (rw && !rw.same) { if (rw.v.ok) ok++; else bad++; } else if (rw && rw.rejected && rw.rejected.length) kept++; });
+    const keptLine = kept ? `<p class="muted small">${esc(T("fidelityKept", { k: kept }))}</p>` : "";
+    return `<section class="card fid"><h2>✓ ${esc(T("fidelity"))}</h2><p>${esc(T("fidelityLine", { n, v: n - ok - bad, ok, bad }))}</p>${keptLine}<p class="muted small">${esc(T("fidelityNote"))}</p></section>`;
   }
 
   function evidenceHTML() {
@@ -368,14 +369,29 @@ summary{cursor:pointer;font-size:.82em;color:var(--acc);margin-top:8px;min-heigh
   }
 
   // ---------- optional on-device AI (experimental) ----------
+  // The client talks to the background page (Firefox's on-device AI runtime). Without it, nothing is rewritten.
+  const sendAI = (msg) => {
+    if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) return Promise.reject(new Error("no background"));
+    return chrome.runtime.sendMessage(Object.assign({ speakmi: "ai" }, msg));
+  };
+  const aiText = (code, hint) => code === "no-permission" ? T("aiNoPermission") : code === "lang" ? T("aiEnOnly")
+    : code === "no-api" ? (hint === "flags" ? T("aiNeedFlags") : T("aiNoApi")) : hint === "flags" ? T("aiNeedFlags") : T("aiError", { e: code });
+
   async function initAI() {
-    if (!("Rewriter" in self)) throw new Error(T("aiNoApi"));
-    if (model.lang !== "en") throw new Error(T("aiEnOnly"));
-    const av = await self.Rewriter.availability();
-    if (av === "unavailable") throw new Error(T("aiNoApi"));
-    rewriter = await self.Rewriter.create({
-      tone: "as-is", format: "plain-text", length: "as-is",
-      sharedContext: "Rewrite in plain, simple language for readers who find long or complex sentences hard. Keep every number, name and negation exactly as in the source."
+    if (!LA) throw new Error(T("aiNoApi"));
+    if (!ai) ai = LA.createClient({ E, send: sendAI, builtin: self });
+    try { await ai.init(model.lang); }
+    // state "error" carries the real message from Firefox (model download or engine failure): show it, not the word "error".
+    catch (e) { ai = null; const err = new Error(aiText(e.state === "error" ? e.message : (e.state || e.message), e.hint)); err.state = e.state; throw err; }
+  }
+
+  // Download progress comes from Firefox itself (the extension makes no network request).
+  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage && !window.__speakmiAiProgress) {
+    window.__speakmiAiProgress = true;
+    chrome.runtime.onMessage.addListener((m) => {
+      if (!m || m.speakmi !== "ai-progress" || !root) return;
+      const pr = m.progress || {}, n = typeof pr.progress === "number" ? Math.round(pr.progress <= 1 ? pr.progress * 100 : pr.progress) : null;
+      st.aiMsg = n === null ? T("aiBusy") : T("aiDownloading", { p: n }); render();
     });
   }
 
@@ -386,16 +402,15 @@ summary{cursor:pointer;font-size:.82em;color:var(--acc);margin-top:8px;min-heigh
   }
 
   async function maybeRewrite() {
-    if (!S.ai || !rewriter || st.busy || !model) return;
+    if (!S.ai || !ai || st.busy || !model) return;
     const todo = visibleChunks().flatMap((c) => c.units.flat()).filter((id) => !st.rewrites[id]);
     if (!todo.length) return;
     st.busy = true; render();
     try {
       for (const id of todo) {
         const src = model.sent[id].text;
-        const out = ((await rewriter.rewrite(src)) || "").trim();
-        const v = E.verifyPoint([src], out, model.lang, { mode: "rewrite" });
-        st.rewrites[id] = { text: out || src, v, same: !out || out === src };
+        // gate(): the rewrite is kept only if it passes the fidelity checks; otherwise the ORIGINAL sentence is used.
+        st.rewrites[id] = await ai.rewrite(src, model.lang);
       }
       st.aiMsg = "";
     } catch (e) {
@@ -484,13 +499,14 @@ summary{cursor:pointer;font-size:.82em;color:var(--acc);margin-top:8px;min-heigh
     try {
       await loadSettings();
       Object.assign(st, { chunk: -1, original: false, rewrites: {}, showOrig: new Set(), openSrc: new Set(), openSec: new Set([0]), busy: false, aiMsg: "", panel: false, marks: new Set(), paywall: false, finished: false, celebrate: false, streak: null });
-      rewriter = null; model = null;
+      ai = null; model = null;
       BR.loadFonts().then((ok) => { if (ok && root) render(); }).catch(() => {});
       article = extract();
       st.premium = true; st.plan = "open"; st.left = Infinity;
       if (article) { analyze(); if (!S.focus) st.chunk = 0; }
       if (S.ai && (!st.premium || !model)) S.ai = false;
-      if (S.ai) { try { await initAI(); } catch (e) { S.ai = false; st.aiMsg = e.message; } }
+      // A page in another language only skips the AI for this page; the reader's choice stays on for English pages.
+      if (S.ai) { try { await initAI(); } catch (e) { st.aiMsg = e.message; if (e.state !== "lang") { S.ai = false; saveSettings(); } } }
     } catch (e) {
       // Never leave the reader with a blank page: show what went wrong.
       console.error("[Speakmi]", e);

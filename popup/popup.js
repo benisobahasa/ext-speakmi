@@ -44,12 +44,67 @@ function paintSettings() {
   $("ui").innerHTML = opts; $("ui").value = S.ui;
   $("focus").checked = !!S.focus;
 }
+// On-device AI, one button. Turn on = ask Firefox for the optional "trialML" permission (on the reader's click),
+// then check the whole chain and download the model once, automatically. The reader uses the AI from then on.
+// Help text appears only when Firefox itself has the feature switched off.
+let aiModel = "Xenova/flan-t5-small", aiOn = false, aiBusy = false;
+async function aiStatus() {
+  try { const r = await chrome.runtime.sendMessage({ speakmi: "ai", op: "status" }); if (r && r.model) aiModel = r.model.id; } catch (e) { /* background not ready */ }
+  try { aiOn = !!(await chrome.permissions.contains({ permissions: ["trialML"] })); } catch (e) { aiOn = false; }
+}
+const setAiState = (t, bad) => { $("aiState").textContent = t || ""; $("aiState").className = "small " + (bad ? "bad" : "muted"); };
+function paintAI() {
+  $("lAi").textContent = T("popupAiTitle");
+  $("aiText").textContent = T("popupAiText", { m: aiModel });
+  $("aiBtn").textContent = !aiOn ? T("popupAiEnable") : S.ai ? T("popupAiDisable") : T("popupAiRetry");
+  $("aiBtn").disabled = aiBusy;
+  $("aiHelp").textContent = T("popupAiHelp");
+}
+// Runs the real chain inside Firefox: permission, AI API, model download, one test sentence.
+async function checkAI() {
+  aiBusy = true; paintAI(); $("aiHelp").hidden = true; setAiState(T("popupAiTesting"));
+  try {
+    const r = await chrome.runtime.sendMessage({ speakmi: "ai", op: "selftest" });
+    const steps = (r && r.steps) || [];
+    if (!steps.length) throw new Error("no answer from the background page");
+    const bad = steps.find((st) => !st.ok);
+    if (!bad) { S.ai = true; save(); setAiState(T("popupAiReady")); }
+    else {
+      S.ai = false; save();
+      if (/browser\.trial\.ml/.test(bad.name)) { $("aiHelp").hidden = false; setAiState(""); }
+      else setAiState(T("popupAiFail", { e: bad.name + ": " + bad.detail }), true);
+    }
+  } catch (e) { console.error("[Speakmi popup] check", e); setAiState(T("popupAiFail", { e: errText(e) }), true); }
+  aiBusy = false; await aiStatus(); paintAI();
+}
+async function toggleAI() {
+  if (aiBusy) return;
+  setAiState("");
+  try {
+    if (aiOn && S.ai) { await chrome.permissions.remove({ permissions: ["trialML"] }); S.ai = false; save(); $("aiHelp").hidden = true; await aiStatus(); paintAI(); return; }
+    if (aiOn) return checkAI();
+    const granted = await chrome.permissions.request({ permissions: ["trialML"] });
+    if (!granted) { setAiState(T("popupAiDenied"), true); return; }
+    await aiStatus(); return checkAI();
+  } catch (e) {
+    // Firefox throws here when its AI feature is switched off (the permission is then not offered at all).
+    console.error("[Speakmi popup] permission", e);
+    $("aiHelp").hidden = false; setAiState("");
+    await aiStatus(); paintAI();
+  }
+}
+// The first run downloads the model. Firefox reports progress to the background page, which forwards it here.
+if (chrome.runtime && chrome.runtime.onMessage && chrome.runtime.onMessage.addListener) chrome.runtime.onMessage.addListener((m) => {
+  if (!aiBusy || !m || m.speakmi !== "ai-progress") return;
+  const pr = m.progress || {}, n = typeof pr.progress === "number" ? Math.round(pr.progress <= 1 ? pr.progress * 100 : pr.progress) : null;
+  if (n !== null) setAiState(T("popupAiProgress", { p: n }));
+});
 function paintEvidence() {
   $("evidence").innerHTML = EV.map((e) => `<li><span class="grade ${e.cls}">${e.grade}</span><b>${e.feature}</b><br><span class="muted">${e.note}</span></li>`).join("");
 }
 // Each part is isolated: if one fails, the others still render and the buttons keep working.
 function paint() {
-  for (const part of [paintTexts, paintProfiles, paintSettings, paintEvidence]) {
+  for (const part of [paintTexts, paintProfiles, paintSettings, paintAI, paintEvidence]) {
     try { part(); } catch (e) { console.error("[Speakmi popup]", part.name, e); }
   }
 }
@@ -57,7 +112,7 @@ function paint() {
 const errText = (e) => (e && e.message) ? e.message : String(e);
 // Leading "/" = from the extension root. Firefox resolves a path without it relative to the popup page
 // (popup/lib/Readability.js), which does not exist.
-const LIB = ["/lib/Readability.js", "/content/brand.js", "/content/config.js", "/content/i18n.js", "/content/evidence.js", "/content/engine.js", "/content/overlay.js"];
+const LIB = ["/lib/Readability.js", "/content/brand.js", "/content/config.js", "/content/i18n.js", "/content/evidence.js", "/content/engine.js", "/content/localai.js", "/content/overlay.js"];
 
 // Firefox does not reject executeScript when the injected code throws: the error is returned inside the
 // result. Without this check a failure looks like success and the popup just closes.
@@ -105,10 +160,14 @@ async function run() {
   $("ui").addEventListener("change", (e) => { S.ui = e.target.value; save(); paint(); });
   $("focus").addEventListener("change", (e) => { S.focus = e.target.checked; save(); });
   $("run").addEventListener("click", run);
+  $("aiBtn").addEventListener("click", toggleAI);
   try { $("logo").src = BR.logo; BR.loadFonts(); } catch (e) { console.error("[Speakmi popup]", e); }
   try {
     const r = await chrome.storage.local.get(["speakmiSettings"]);
     S = Object.assign({}, DEFAULTS, r.speakmiSettings || {});
   } catch (e) { /* defaults */ }
+  await aiStatus();
   paint();
+  // The permission prompt can close this popup. When it is reopened with the permission granted, finish the setup.
+  if (aiOn && !S.ai) checkAI();
 })();
