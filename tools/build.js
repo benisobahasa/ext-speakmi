@@ -4,7 +4,7 @@ const fs = require("fs"), path = require("path"), { execSync } = require("child_
 const root = path.join(__dirname, ".."), out = path.join(root, "dist", "firefox");
 fs.rmSync(path.join(root, "dist"), { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
-for (const p of ["content", "popup", "lib", "icons"]) fs.cpSync(path.join(root, p), path.join(out, p), { recursive: true });
+for (const p of ["content", "popup", "background", "lib", "icons"]) fs.cpSync(path.join(root, p), path.join(out, p), { recursive: true });
 for (const f of ["manifest.json", "LICENSE"]) fs.copyFileSync(path.join(root, f), path.join(out, f));
 try { execSync(`cd "${out}" && zip -qr "../speakmi-firefox.zip" .`); console.log("built dist/firefox + zip"); }
 catch { console.log("built dist/firefox (zip not found: compress the folder yourself)"); }

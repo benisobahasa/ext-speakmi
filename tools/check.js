@@ -8,7 +8,7 @@ let bad = 0;
 const fail = (m) => { bad++; console.error("FAIL: " + m); };
 const ok = (m) => console.log("ok:   " + m);
 
-const own = [...list("content", ".js"), ...list("popup", ".js"), ...list("tools", ".js"), "tests/run.js"];
+const own = [...list("content", ".js"), ...list("popup", ".js"), ...list("background", ".js"), ...list("tools", ".js"), "tests/run.js", "tests/ai.test.js"];
 for (const f of own) {
   try { execFileSync(process.execPath, ["--check", path.join(root, f)], { stdio: "pipe" }); } catch (e) { fail("syntax error in " + f); }
   if (!/Mozilla Public License/.test(read(f).slice(0, 400))) fail("missing MPL header: " + f);
@@ -23,20 +23,25 @@ for (const f of ["manifest.json"]) {
   if (JSON.stringify((g.data_collection_permissions || {}).required) !== '["none"]') fail("data_collection_permissions must be required: [none]");
   const allowed = ["activeTab", "scripting", "storage"];
   for (const p of m.permissions || []) if (!allowed.includes(p)) fail("unexpected permission: " + p);
+  // The only optional permission is Firefox's on-device AI runtime. It is asked for at runtime, on the reader's click.
+  for (const p of m.optional_permissions || []) if (p !== "trialML") fail("unexpected optional permission: " + p);
+  if ((m.optional_permissions || []).some((p) => p !== "trialML") || (m.optional_permissions || []).length > 1) fail("optional_permissions may only be [trialML]");
+  const bg = (m.background || {}).scripts || [];
+  for (const f of bg) if (!fs.existsSync(path.join(root, f))) fail("background script missing: " + f);
   if (m.host_permissions && m.host_permissions.length) fail("host_permissions must be empty");
   if (m.version !== JSON.parse(read("package.json")).version) fail("manifest and package.json versions differ");
 }
 ok("manifest: MV3, gecko id, no data collection, minimal permissions, versions match");
 
 const forbidden = [/\bfetch\s*\(/, /XMLHttpRequest/, /\bWebSocket\b/, /sendBeacon/, /\bEventSource\b/, /importScripts\s*\(/, /\beval\s*\(/, /new Function\s*\(/];
-for (const f of [...list("content", ".js"), ...list("popup", ".js")]) {
+for (const f of [...list("content", ".js"), ...list("popup", ".js"), ...list("background", ".js")]) {
   const src = read(f);
   for (const re of forbidden) if (re.test(src)) fail(`${f} uses a forbidden API: ${re}`);
 }
 for (const f of list("popup", ".html")) {
   if (/(src|href)\s*=\s*["']https?:/i.test(read(f))) fail(f + " loads a remote resource");
 }
-ok("no network APIs, eval, or remote resources in content/ and popup/");
+ok("no network APIs, eval, or remote resources in content/, popup/ and background/");
 
 // every element the popup script looks up by id must exist in popup.html (a missing one stops the popup half-way)
 {

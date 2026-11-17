@@ -1,0 +1,3 @@
+{"id":"s1","lang":"en","source":"The committee will convene on 14 March to examine the proposal.","output":"The committee will meet on 14 March to look at the proposal.","latency_ms":1800}
+{"id":"s2","lang":"en","source":"The fee is 30 euros and it is paid every month.","output":"The fee is 13 euros and it is paid every month.","latency_ms":1500}
+{"id":"s3","lang":"en","source":"The drug does not reduce the risk of stroke in older adults.","output":"The drug reduces the risk of stroke in older adults.","latency_ms":1700}

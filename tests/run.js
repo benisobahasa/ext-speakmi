@@ -78,7 +78,7 @@ ok(V("The service is free.", "The service is not free.", "en", "summary").issues
 }
 
 // ---- overlay in a simulated browser ----
-const FILES = ["lib/Readability.js", "content/brand.js", "content/config.js", "content/i18n.js", "content/evidence.js", "content/engine.js", "content/overlay.js"];
+const FILES = ["lib/Readability.js", "content/brand.js", "content/config.js", "content/i18n.js", "content/evidence.js", "content/engine.js", "content/localai.js", "content/overlay.js"];
 function overlayTest(f, settings, extraStore) {
   const dom = new JSDOM(demo(f), { runScripts: "outside-only", pretendToBeVisual: true, url: "https://example.org/" });
   const w = dom.window, store = Object.assign({ speakmiSettings: Object.assign({ profile: "adhd", focus: true, ui: "en" }, settings || {}) }, extraStore || {});
@@ -180,13 +180,14 @@ const click = (R, sel) => { const el = R.querySelector(sel); if (!el) throw new 
   }
 
   // --- popup: errors from injected scripts are shown, the popup stays open, sections render on their own ---
-  async function popupTest(execImpl, uiLang) {
+  async function popupTest(execImpl, uiLang, extra) {
     const html = fs.readFileSync(path.join(__dirname, "../popup/popup.html"), "utf8").replace(/<script src="[^"]+"><\/script>/g, "");
     const d = new JSDOM(html, { runScripts: "outside-only", pretendToBeVisual: true });
     const w = d.window;
     Object.defineProperty(w.navigator, "language", { value: uiLang || "en-US" });
     let closed = false; w.close = () => { closed = true; };
     w.chrome = { storage: { local: { get: async () => ({}), set: async () => {} } }, tabs: { query: async () => [{ id: 7 }] }, scripting: { executeScript: execImpl } };
+    if (extra) Object.assign(w.chrome, extra);
     w.FontFace = function () { this.load = async () => this; }; w.document.fonts = { add() {} };
     for (const f of ["content/brand.js", "content/config.js", "content/i18n.js", "content/evidence.js", "popup/popup.js"]) w.eval(fs.readFileSync(path.join(__dirname, "..", f), "utf8"));
     await new Promise((r) => setTimeout(r, 50));
@@ -199,7 +200,7 @@ const click = (R, sel) => { const el = R.querySelector(sel); if (!el) throw new 
     ok(good.d.querySelectorAll("#profiles label").length === 5 && good.d.querySelectorAll("#lang option").length === 4, "popup draws profiles and language lists (Indonesian UI)");
     good.d.getElementById("run").click(); await sleep(50);
     ok(good.wasClosed(), "popup closes only after the reading view was added");
-    ok(Array.isArray(injected) && injected.length === 7 && injected.every((f) => f.startsWith("/") && fs.existsSync(path.join(__dirname, "..", f.slice(1)))), "popup injects root-relative paths that exist (Firefox resolves others against popup/)");
+    ok(Array.isArray(injected) && injected.length === 8 && injected.every((f) => f.startsWith("/") && fs.existsSync(path.join(__dirname, "..", f.slice(1)))), "popup injects root-relative paths that exist (Firefox resolves others against popup/)");
   }
   {
     const bad = await popupTest(async (o) => (o.files ? [{ result: undefined }] : o.func.toString().includes("then") ? [{ error: { message: "boom in page" } }] : [{ result: false }]));
@@ -211,6 +212,37 @@ const click = (R, sel) => { const el = R.querySelector(sel); if (!el) throw new 
     const miss = await popupTest(async (o) => (o.files ? [{ error: "Unable to load script" }] : [{ result: false }]));
     miss.d.getElementById("run").click(); await sleep(50);
     ok(!miss.wasClosed() && /Unable to load script/.test(miss.d.getElementById("errDetail").textContent), "popup reports a script file that could not be loaded");
+  }
+  {
+    // AI section: ONE button. Turn on = permission + automatic check; help text only when Firefox has the feature off.
+    const mkRt = (steps) => ({ sendMessage: async (m) => (m.op === "selftest" ? { steps } : { state: "ready", model: { id: "Xenova/flan-t5-small" } }) });
+    const okSteps = [{ name: "Permission trialML", ok: true }, { name: "Firefox AI API (browser.trial.ml)", ok: true }, { name: "Model Xenova/flan-t5-small", ok: true }, { name: "Test sentence", ok: true, detail: "ok" }];
+    {
+      let granted = false, saved = null;
+      const t = await popupTest(async () => [{ result: false }], "en-US", { runtime: mkRt(okSteps), permissions: { contains: async () => granted, request: async () => { granted = true; return true; } } });
+      t.w.chrome.storage.local.set = async (o) => { saved = o; };
+      ok(!t.d.getElementById("aiTest") && !t.d.getElementById("aiSteps"), "popup AI: no test button and no step list any more");
+      ok(t.d.getElementById("aiBtn").textContent === "Turn on AI" && t.d.getElementById("aiHelp").hidden, "popup AI: one button, no help text by default");
+      t.d.getElementById("aiBtn").click(); await sleep(80);
+      ok(/AI is on/.test(t.d.getElementById("aiState").textContent) && t.d.getElementById("aiBtn").textContent === "Turn off AI" && saved && saved.speakmiSettings.ai === true, "popup AI: one click asks the permission, checks everything and switches the AI on");
+    }
+    {
+      const steps = [okSteps[0], { name: "Firefox AI API (browser.trial.ml)", ok: false, detail: "missing" }];
+      const t = await popupTest(async () => [{ result: false }], "en-US", { runtime: mkRt(steps), permissions: { contains: async () => true } });
+      await sleep(80);
+      ok(!t.d.getElementById("aiHelp").hidden && /about:config/.test(t.d.getElementById("aiHelp").textContent) && t.d.getElementById("aiBtn").textContent === "Try again", "popup AI: permission granted but API off shows the short about:config note and a retry button");
+    }
+    {
+      const steps = [okSteps[0], okSteps[1], { name: "Model Xenova/flan-t5-small", ok: false, detail: "Model download timed out" }];
+      const t = await popupTest(async () => [{ result: false }], "en-US", { runtime: mkRt(steps), permissions: { contains: async () => true } });
+      await sleep(80);
+      ok(/timed out/.test(t.d.getElementById("aiState").textContent) && t.d.getElementById("aiHelp").hidden, "popup AI: a model error is shown as text, without the flags note");
+    }
+    {
+      const f = await popupTest(async () => [{ result: false }], "en-US", { runtime: { sendMessage: async () => ({ state: "no-api" }) }, permissions: { contains: async () => false, request: async () => { throw new Error("Cannot request permission trialML"); } } });
+      f.d.getElementById("aiBtn").click(); await sleep(50);
+      ok(!f.d.getElementById("aiHelp").hidden && /browser\.ml\.enable/.test(f.d.getElementById("aiHelp").textContent), "popup AI: a refused permission shows the short about:config note");
+    }
   }
   {
     const nohost = await popupTest(async (o) => (o.files ? [{ result: undefined }] : o.func.toString().includes("then") ? [{ result: false }] : [{ result: false }]));
